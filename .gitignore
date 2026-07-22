@@ -1,0 +1,67 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# --- Virtual environments ---
+venv/
+env/
+.venv/
+ENV/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- Environment / secrets ---
+.env
+.env.*
+*.pem
+*.key
+
+# --- Datasets (usually too large / shouldn't be versioned) ---
+data/
+datasets/
+*.csv
+*.zip
+*.tar
+*.tar.gz
+*.rar
+
+# --- Model checkpoints & weights ---
+checkpoints/
+*.h5
+*.pt
+*.pth
+*.onnx
+*.pb
+*.ckpt
+saved_models/
+
+# --- Logs & experiment tracking ---
+logs/
+runs/
+wandb/
+mlruns/
+*.log
+
+# --- OS / editor junk ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# --- Outputs ---
+results/
+outputs/
+*.png
+*.jpg
+*.jpeg
+!docs/**/*.png
+!docs/**/*.jpg
