@@ -1,249 +1,69 @@
-import streamlit as st
-import tensorflow as tf
+import os
 import numpy as np
+import pandas as pd
+import streamlit as st
 from PIL import Image
-import matplotlib.pyplot as plt
+from tensorflow.keras.models import load_model
 
-# -------------------------------------------------
-# Page Configuration
-# -------------------------------------------------
+# ── Config ────────────────────────────────────────────────────────────────
+IMG_SIZE = (48, 48)
+CLASS_NAMES = ["angry", "disgust", "fear", "happy", "neutral", "sad", "surprise"]
+DEFAULT_MODEL_PATH = "models/DeepFER_Best_Model.keras"
 
-st.set_page_config(
-    page_title="DeepFER",
-    page_icon="😊",
-    layout="wide"
-)
-
-# -------------------------------------------------
-# Custom CSS
-# -------------------------------------------------
-
-st.markdown("""
-<style>
-
-.main{
-    background-color:#f7f7f7;
-}
-
-h1,h2,h3{
-    color:#0E1117;
-}
-
-.stButton>button{
-    width:100%;
-    border-radius:10px;
-    height:3em;
-}
-
-</style>
-""", unsafe_allow_html=True)
-
-# -------------------------------------------------
-# Load Model
-# -------------------------------------------------
 
 @st.cache_resource
-def load_model():
-    model = tf.keras.models.load_model("models/emotion_model.keras")
-    return model
+def get_model(model_path: str):
+    return load_model(model_path)
 
-model = load_model()
 
-# -------------------------------------------------
-# Emotion Labels
-# -------------------------------------------------
+def preprocess(img: Image.Image):
+    img = img.convert("L").resize(IMG_SIZE)
+    arr = np.array(img).astype("float32") / 255.0
+    arr = np.expand_dims(arr, axis=(0, -1))
+    return arr, img
 
-emotion_labels = [
-    "Angry",
-    "Disgust",
-    "Fear",
-    "Happy",
-    "Neutral",
-    "Sad",
-    "Surprise"
-]
 
-# -------------------------------------------------
-# Sidebar
-# -------------------------------------------------
-
-st.sidebar.title("😊 DeepFER")
-
-page = st.sidebar.radio(
-    "Navigation",
-    [
-        "🏠 Home",
-        "📷 Predict Emotion",
-        "🧠 About"
-    ]
-)
-
-# -------------------------------------------------
-# HOME
-# -------------------------------------------------
-
-if page == "🏠 Home":
-
-    st.title("😊 DeepFER")
-
-    st.subheader("Facial Emotion Recognition Using Deep Learning")
-
-    st.markdown("---")
-
-    st.write("""
-DeepFER is a Deep Learning based facial emotion recognition system.
-
-The model classifies a face into one of the following emotions:
-
-- 😠 Angry
-- 🤢 Disgust
-- 😨 Fear
-- 😄 Happy
-- 😐 Neutral
-- 😢 Sad
-- 😲 Surprise
-""")
-
-    st.info("👈 Select **Predict Emotion** from the sidebar to begin.")
-
-# -------------------------------------------------
-# Prediction
-# -------------------------------------------------
-
-elif page == "📷 Predict Emotion":
-
-    st.title("📷 Emotion Detection")
-
-    uploaded_file = st.file_uploader(
-        "Upload a Face Image",
-        type=["jpg", "jpeg", "png"]
+def main():
+    st.set_page_config(page_title="DeepFER - Facial Emotion Recognition", page_icon="🙂")
+    st.title("🙂 DeepFER: Facial Emotion Recognition")
+    st.write(
+        "Upload a face image (ideally cropped and front-facing) and the CNN model "
+        "will predict the emotion expressed."
     )
 
-    if uploaded_file is not None:
+    model_path = st.sidebar.text_input("Model path", value=DEFAULT_MODEL_PATH)
 
-        image = Image.open(uploaded_file).convert("L")
+    uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
+
+    if uploaded_file is not None:
+        if not os.path.exists(model_path):
+            st.error(f"Model file not found at: {model_path}. Train a model first.")
+            return
+
+        model = get_model(model_path)
+        image = Image.open(uploaded_file)
 
         col1, col2 = st.columns(2)
-
         with col1:
             st.image(image, caption="Uploaded Image", use_container_width=True)
 
-        # -----------------------------
-        # Preprocess
-        # -----------------------------
-
-        img = image.resize((48,48))
-
-        img = np.array(img)
-
-        img = img.astype("float32")/255.0
-
-        img = np.expand_dims(img, axis=-1)
-
-        img = np.expand_dims(img, axis=0)
-
-        # -----------------------------
-        # Prediction
-        # -----------------------------
-
-        prediction = model.predict(img, verbose=0)
-
-        predicted_class = np.argmax(prediction)
-
-        predicted_emotion = emotion_labels[predicted_class]
-
-        confidence = prediction[0]
+        arr, processed_img = preprocess(image)
+        predictions = model.predict(arr)[0]
+        predicted_idx = int(np.argmax(predictions))
+        predicted_label = CLASS_NAMES[predicted_idx]
+        confidence = predictions[predicted_idx] * 100
 
         with col2:
+            st.image(processed_img, caption="Preprocessed (48x48 grayscale)", use_container_width=True)
 
-            st.success(f"### 😊 Prediction")
+        st.subheader(f"Predicted Emotion: **{predicted_label.upper()}** ({confidence:.1f}%)")
 
-            st.metric(
-                "Detected Emotion",
-                predicted_emotion
-            )
+        scores_df = pd.DataFrame(
+            {"Emotion": CLASS_NAMES, "Confidence (%)": predictions * 100}
+        ).sort_values("Confidence (%)", ascending=False)
 
-            st.metric(
-                "Confidence",
-                f"{confidence[predicted_class]*100:.2f}%"
-            )
+        st.bar_chart(scores_df.set_index("Emotion"))
 
-        st.markdown("---")
 
-        st.subheader("Prediction Probabilities")
-
-        fig, ax = plt.subplots(figsize=(9,4))
-
-        bars = ax.bar(
-            emotion_labels,
-            confidence*100
-        )
-
-        ax.set_ylabel("Probability (%)")
-        ax.set_ylim(0,100)
-
-        for bar in bars:
-
-            y = bar.get_height()
-
-            ax.text(
-                bar.get_x()+bar.get_width()/2,
-                y+1,
-                f"{y:.1f}",
-                ha='center'
-            )
-
-        st.pyplot(fig)
-
-# -------------------------------------------------
-# About
-# -------------------------------------------------
-
-elif page == "🧠 About":
-
-    st.title("🧠 About")
-
-    st.write("""
-### Project Name
-
-DeepFER: Facial Emotion Recognition Using Deep Learning
-
----
-
-### Technologies
-
-- Python
-- TensorFlow
-- Keras
-- NumPy
-- OpenCV
-- Streamlit
-
----
-
-### Model
-
-Deep Learning CNN trained on grayscale facial images (48×48).
-
----
-
-### Emotion Classes
-
-- Angry
-- Disgust
-- Fear
-- Happy
-- Neutral
-- Sad
-- Surprise
-
----
-
-### Developed By
-
-**Sita Bharatula**
-
-MCA (Artificial Intelligence & Machine Learning)
-
-Chandigarh University
-""")
+if __name__ == "__main__":
+    main()
