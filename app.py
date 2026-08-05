@@ -1,69 +1,65 @@
-import os
-import numpy as np
-import pandas as pd
 import streamlit as st
+import tensorflow as tf
+import numpy as np
 from PIL import Image
-from tensorflow.keras.models import load_model
 
-# ── Config ────────────────────────────────────────────────────────────────
-IMG_SIZE = (48, 48)
-CLASS_NAMES = ["angry", "disgust", "fear", "happy", "neutral", "sad", "surprise"]
-DEFAULT_MODEL_PATH = "models/DeepFER_Best_Model.keras"
+st.set_page_config(page_title="DeepFER", page_icon="😊")
 
+st.title("😊 DeepFER - Facial Emotion Recognition")
+
+emotion_labels = [
+    "Angry",
+    "Disgust",
+    "Fear",
+    "Happy",
+    "Neutral",
+    "Sad",
+    "Surprise"
+]
+
+model_name = st.selectbox(
+    "Select Model",
+    [
+        "CNN_Model.keras",
+        "Improved_CNN_Model.keras",
+        "Final_Optimized_CNN_Model.keras"
+    ]
+)
 
 @st.cache_resource
-def get_model(model_path: str):
-    return load_model(model_path)
+def load_model(model_path):
+    return tf.keras.models.load_model(model_path)
 
+model = load_model(model_name)
 
-def preprocess(img: Image.Image):
-    img = img.convert("L").resize(IMG_SIZE)
-    arr = np.array(img).astype("float32") / 255.0
-    arr = np.expand_dims(arr, axis=(0, -1))
-    return arr, img
+uploaded_file = st.file_uploader(
+    "Upload a Face Image",
+    type=["jpg", "jpeg", "png"]
+)
 
+if uploaded_file is not None:
 
-def main():
-    st.set_page_config(page_title="DeepFER - Facial Emotion Recognition", page_icon="🙂")
-    st.title("🙂 DeepFER: Facial Emotion Recognition")
-    st.write(
-        "Upload a face image (ideally cropped and front-facing) and the CNN model "
-        "will predict the emotion expressed."
-    )
+    image = Image.open(uploaded_file).convert("L")
+    st.image(image, caption="Uploaded Image", width=250)
 
-    model_path = st.sidebar.text_input("Model path", value=DEFAULT_MODEL_PATH)
+    image = image.resize((48, 48))
 
-    uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
+    img = np.array(image)
 
-    if uploaded_file is not None:
-        if not os.path.exists(model_path):
-            st.error(f"Model file not found at: {model_path}. Train a model first.")
-            return
+    img = img.astype("float32") / 255.0
 
-        model = get_model(model_path)
-        image = Image.open(uploaded_file)
+    img = img.reshape(1, 48, 48, 1)
 
-        col1, col2 = st.columns(2)
-        with col1:
-            st.image(image, caption="Uploaded Image", use_container_width=True)
+    prediction = model.predict(img)
 
-        arr, processed_img = preprocess(image)
-        predictions = model.predict(arr)[0]
-        predicted_idx = int(np.argmax(predictions))
-        predicted_label = CLASS_NAMES[predicted_idx]
-        confidence = predictions[predicted_idx] * 100
+    predicted_class = np.argmax(prediction)
 
-        with col2:
-            st.image(processed_img, caption="Preprocessed (48x48 grayscale)", use_container_width=True)
+    confidence = prediction[0][predicted_class] * 100
 
-        st.subheader(f"Predicted Emotion: **{predicted_label.upper()}** ({confidence:.1f}%)")
+    st.success(f"Predicted Emotion: {emotion_labels[predicted_class]}")
+    st.write(f"Confidence: {confidence:.2f}%")
 
-        scores_df = pd.DataFrame(
-            {"Emotion": CLASS_NAMES, "Confidence (%)": predictions * 100}
-        ).sort_values("Confidence (%)", ascending=False)
+    st.subheader("Prediction Scores")
 
-        st.bar_chart(scores_df.set_index("Emotion"))
-
-
-if __name__ == "__main__":
-    main()
+    for i in range(len(emotion_labels)):
+        st.write(f"{emotion_labels[i]} : {prediction[0][i]*100:.2f}%")
